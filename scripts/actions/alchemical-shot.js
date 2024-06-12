@@ -1,3 +1,6 @@
+import { Weapon } from "../types/pf2e-ranged-combat/weapon.js";
+import { PF2eActor } from "../types/pf2e/actor.js";
+import { PF2eItem } from "../types/pf2e/item.js";
 import { HookManager } from "../utils/hook-manager.js";
 import { Updates } from "../utils/updates.js";
 import { ensureDuration, getControlledActorAndToken, getEffectFromActor, getFlag, getItem, getItemFromActor, postActionToChat, postToChat, setEffectTarget, showWarning } from "../utils/utils.js";
@@ -11,6 +14,33 @@ const format = (key, data) => game.i18n.format("pf2e-ranged-combat.actions.alche
 
 export function initialiseAlchemicalShort() {
     HookManager.register("weapon-attack", handleWeaponFired);
+    HookManager.register("weapon-damage", handleWeaponDamage);
+    HookManager.register("post-action", handlePostAction);
+}
+
+/**
+ * Handle posting an action
+ * 
+ * @param {{ actor: PF2eActor, item: PF2eItem, updates: Updates} params
+ */
+async function handlePostAction({ actor, item, updates }) {
+    if (item.sourceId === ALCHEMICAL_SHOT_FEAT_ID) {
+        return false;
+    }
+
+    const weapon = await getWeapon(
+        actor,
+        weapon => weapon.isEquipped && (weapon.group == "firearm" || weapon.group == "crossbow"),
+        format("warningNotWieldingProperWeapon", { token: token.name })
+    );
+    if (!weapon) {
+        return false;
+    }
+
+    const success = await performAlchemicalShot(actor, weapon, updates)
+    updates.handleUpdates();
+
+    return success;
 }
 
 export async function alchemicalShot() {
@@ -34,6 +64,31 @@ export async function alchemicalShot() {
         return;
     }
 
+    const updates = new Updates(actor);
+    const success = await performAlchemicalShot(actor, weapon, updates);
+
+    if (success) {
+        updates.handleUpdates();
+
+        await postActionToChat(alchemicalShotFeat);
+        await postToChat(
+            actor,
+            bomb.img,
+            format("tokenPoursBombIntoWeapon", { token: token.name, weapon: weapon.name, bomb: bomb.name }),
+            localize("alchemicalShot"),
+            2
+        );
+    }
+}
+
+/**
+ * @param {PF2eActor} actor
+ * @param {Weapon} weapon
+ * @param {Updates} updates
+ * 
+ * @returns {Prmomise<boolean>} true if the action was performed
+ */
+export async function performAlchemicalShot(actor, weapon, updates) {
     const bomb = await getWeapon(
         actor,
         weapon =>
@@ -42,10 +97,8 @@ export async function alchemicalShot() {
         format("warningNoAlchemicalBombs", { token: token.name })
     );
     if (!bomb) {
-        return;
+        return false;
     }
-
-    const updates = new Updates(actor);
 
     // If there's an existing alchemical shot effect for this weapon, remove it
     const alchemicalShotEffect = getEffectFromActor(weapon.actor, ALCHEMICAL_SHOT_EFFECT_ID, weapon.id);
@@ -86,16 +139,7 @@ export async function alchemicalShot() {
         }
     );
 
-    await postActionToChat(alchemicalShotFeat);
-    await postToChat(
-        actor,
-        bomb.img,
-        format("tokenPoursBombIntoWeapon", { token: token.name, weapon: weapon.name, bomb: bomb.name }),
-        localize("alchemicalShot"),
-        2
-    );
-
-    updates.handleUpdates();
+    return true;
 }
 
 /**
@@ -118,5 +162,17 @@ function handleWeaponFired({ weapon, updates }) {
                 }
             );
         }
+    }
+}
+
+/**
+ * Remove any Alchemical Shot effects for the weapon.
+ * 
+ * @param {{ weapon: Weapon, updates: Updates }}
+ */
+function handleWeaponDamage({ weapon, updates }) {
+    const alchemicalShotEffect = getEffectFromActor(weapon.actor, ALCHEMICAL_SHOT_EFFECT_ID, weapon.id);
+    if (alchemicalShotEffect) {
+        updates.delete(alchemicalShotEffect);
     }
 }

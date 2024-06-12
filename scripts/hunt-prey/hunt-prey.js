@@ -3,14 +3,14 @@ import { PF2eItem } from "../types/pf2e/item.js";
 import { PF2eToken } from "../types/pf2e/token.js";
 import { HookManager } from "../utils/hook-manager.js";
 import { Updates } from "../utils/updates.js";
-import { getControlledActorAndToken, getFlag, getItem, getItemFromActor, postActionToChat, postToChat, showWarning } from "../utils/utils.js";
+import { getControlledActor, getControlledActorAndToken, getFlag, getItem, getItemFromActor, postActionToChat, postToChat, showWarning } from "../utils/utils.js";
 import { DOUBLE_PREY_FEAT_ID, FLURRY_FEATURE_ID, HUNTED_PREY_EFFECT_ID, HUNT_PREY_ACTION_ID, HUNT_PREY_IMG, OUTWIT_FEATURE_ID, PRECISION_FEATURE_ID, SHARED_PREY_FEAT_ID, TRIPLE_THREAT_FEAT_ID } from "./constants.js";
 
 const localize = (key) => game.i18n.localize("pf2e-ranged-combat.huntPrey." + key);
 const format = (key, data) => game.i18n.format("pf2e-ranged-combat.huntPrey." + key, data);
 
 export async function huntPrey() {
-    const { actor, token } = getControlledActorAndToken();
+    const actor = getControlledActor();
     if (!actor) {
         return;
     }
@@ -27,7 +27,10 @@ export async function huntPrey() {
     }
 
     await postActionToChat(huntPreyAction);
+
+    const updates = new Updates(actor);
     await performHuntPrey(actor, token, huntPreyAction, checkResult);
+    updates.handleUpdates();
 }
 
 export function checkHuntPrey(actor) {
@@ -54,10 +57,9 @@ export function checkHuntPrey(actor) {
  * @param {PF2eToken} token
  * @param {PF2eItem} huntPreyAction
  * @param {{ targets: [], maxTargets: { num: number, word: string } }} checkResult
+ * @param {Updates} updates
  */
-export async function performHuntPrey(actor, token, huntPreyAction, checkResult) {
-    const updates = new Updates(actor);
-
+export async function performHuntPrey(actor, token, huntPreyAction, checkResult, updates) {
     const targets = checkResult.targets;
 
     const remainingTargets = checkResult.maxTargets.num - targets.length;
@@ -116,10 +118,6 @@ export async function performHuntPrey(actor, token, huntPreyAction, checkResult)
     }
 
     await HookManager.call("hunt-prey", { actor, updates });
-
-    updates.handleUpdates();
-
-    return;
 }
 
 function getTargets(maxTargets) {

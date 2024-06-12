@@ -1,3 +1,7 @@
+import { postToChatConfig } from "./config";
+import { HookManager } from "./utils/hook-manager";
+import { Updates } from "./utils/updates";
+
 export function initialiseChatMessageHooks() {
     /**
      * When rendering a chat message sent by this module, give it the "hide" class
@@ -30,7 +34,7 @@ export function initialiseChatMessageHooks() {
      */
     Hooks.on(
         "renderChatLog",
-        ({}, html) => {
+        ({ }, html) => {
             const chatLog = html.find("#chat-log");
             const rangedCombatMessages = chatLog.find(".message.pf2e-ranged-combat");
             rangedCombatMessages.filter(".hide").remove();
@@ -50,6 +54,32 @@ export function initialiseChatMessageHooks() {
                 }
             );
             observer.observe(chatLog[0], { childList: true });
+        }
+    );
+
+    Hooks.on(
+        "preCreateChatMessage",
+        message => {
+            const actor = message.actor;
+            if (!actor) {
+                return true;
+            }
+
+            const item = message.item;
+            if (!item) {
+                return true;
+            }
+
+            const updates = new Updates(actor);
+
+            const match = HookManager.call({ actor, item, updates });
+            if (!match) {
+                return true;
+            }
+
+            updates.handleUpdates();
+
+            return game.settings.get("pf2e-ranged-combat", "postActionToChat") == postToChatConfig.full;
         }
     );
 }

@@ -7,27 +7,21 @@ import { checkHuntPrey, performHuntPrey } from "./hunt-prey.js";
 export function initialiseHuntPrey() {
 
     // When posting the Hunt Prey chat message, use the Hunt Prey action
-    Hooks.on(
-        "preCreateChatMessage",
-        message => {
-            const item = message.item;
-            if (!item || item.sourceId != HUNT_PREY_ACTION_ID) {
-                return true;
-            }
-
-            const actor = message.actor;
-            if (!actor) {
-                return true;
+    HookManager.registerCheck(
+        "post-action",
+        ({ actor, item, updates }) => {
+            if (item.sourceId != HUNT_PREY_ACTION_ID) {
+                return false;
             }
 
             const checkResult = checkHuntPrey(actor);
             if (!checkResult.valid) {
-                return true;
+                return false;
             }
 
-            performHuntPrey(actor, null, item, checkResult);
+            performHuntPrey(actor, null, item, checkResult, updates);
 
-            return game.settings.get("pf2e-ranged-combat", "postActionToChat") == postToChatConfig.full;
+            return true;
         }
     );
 
@@ -35,7 +29,7 @@ export function initialiseHuntPrey() {
     libWrapper.register(
         "pf2e-ranged-combat",
         "CONFIG.PF2E.Item.documentClasses.effect.prototype._onCreate",
-        function(wrapper, ...args) {
+        function (wrapper, ...args) {
             if (this.sourceId === HUNTED_PREY_EFFECT_ID) {
                 const sourceActorName = this.actor.name;
                 const sourceActorID = this.actor.id;
@@ -69,7 +63,7 @@ export function initialiseHuntPrey() {
     libWrapper.register(
         "pf2e-ranged-combat",
         "CONFIG.PF2E.Item.documentClasses.effect.prototype._onDelete",
-        function(wrapper, ...args) {
+        function (wrapper, ...args) {
             if (this.sourceId === HUNTED_PREY_EFFECT_ID) {
                 const targetIds = getFlag(this, "targetIds") ?? [];
 

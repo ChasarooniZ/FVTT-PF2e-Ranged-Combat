@@ -43,14 +43,20 @@ export class HookManager {
      * 
      * @param {string} key
      * @param {*} args
+     * 
+     * @returns {boolean}
      */
     static async call(key, args) {
+        let match = false;
+
         const callbacks = this.callbacks.get(key);
         if (callbacks) {
             for (let callback of callbacks) {
-                await callback(args);
+                match |= await callback(args);
             }
         }
+
+        return match;
     }
 
     /**
